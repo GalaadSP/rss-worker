@@ -71,7 +71,7 @@ function normalizeItem(feedMeta: any, raw: any) {
   link && link.length > 0 ? link :
   (title + "|" + date));
   return {
-    id: guid,
+    id:,
     title,
     url: link,
     date,
@@ -156,19 +156,37 @@ export default {
       const all = (await Promise.all(FEEDS.map((f) => fetchFeed(env, f)))).flat();
 
       let enriched = all;
-      if (url.searchParams.get("summarize") === "true" && env.OPENAI_API_KEY) {
-        enriched = await Promise.all(
-          all.map(async (it) => {
-            const cacheKey = `sum:${it.id}`;
-            const cached = await env.FEED_CACHE.get(cacheKey);
-            if (cached) return { ...it, ai_summary: cached };
+   if (url.searchParams.get("summarize") === "true" && env.OPENAI_API_KEY) {
+  enriched = await Promise.all(
+    all.map(async (it) => {
+      try {
+        // ✅ Nouvelle clé de cache robuste
+        const cacheKey = safeCacheKeyForSummary(it);
 
-            const ai = await summarizeIfEnabled(env, `${it.title}\n${it.summary}`);
-            if (ai) await env.FEED_CACHE.put(cacheKey, ai, { expirationTtl: 60 * 60 * 12 });
-            return { ...it, ai_summary: ai };
-          })
+        // ✅ Vérifie si déjà en cache KV
+        const cached = await env.FEED_CACHE.get(cacheKey);
+        if (cached) return { ...it, ai_summary: cached };
+
+        // ✅ Enrichit le prompt avec l’URL pour éviter les doublons
+        const ai = await summarizeIfEnabled(
+          env,
+          `${it.title}\n${it.url}\n${it.summary || ""}`
         );
+
+        if (ai) {
+          // ✅ Cache 12h
+          await env.FEED_CACHE.put(cacheKey, ai, { expirationTtl: 60 * 60 * 12 });
+        }
+
+        return { ...it, ai_summary: ai };
+      } catch (err) {
+        console.error("Erreur IA pour l’article :", it.title, err);
+        return { ...it };
       }
+    })
+  );
+}
+
 
       enriched.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       const limited = enriched.slice(0, 100);

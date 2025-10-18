@@ -118,31 +118,48 @@ async function fetchFeed(env: Env, feedMeta: any) {
   return normalized;
 }
 
-async function summarizeIfEnabled(env: Env, text: string) {
-  if (!env.OPENAI_API_KEY) return null;
-  const prompt = `Résumé en 2 phrases, franc et factuel (<=280 caractères). Si un red flag est évident, mentionne-le.\n---\n${text}\n---`;
+async function summarizeIfEnabled(env, text: string) {
+  try {
+    if (!env.OPENAI_API_KEY) return null;
+    if (!text || text.trim().length < 40)
+      return "Texte trop court pour un résumé pertinent.";
 
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
+    const payload = {
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "Assistant de résumé d’actualités, précis et concis." },
-        { role: "user", content: prompt }
+        {
+          role: "system",
+          content:
+            "Tu es un assistant concis. Résume en 3 phrases maximum, sans doublons ni paraphrase inutile."
+        },
+        { role: "user", content: text.slice(0, 3000) } // coupe pour éviter timeout
       ],
-      temperature: 0.3,
-      max_tokens: 140
-    })
-  });
+      temperature: 0.5,
+    };
 
-  if (!resp.ok) return null;
-  const data = await resp.json();
-  return data?.choices?.[0]?.message?.content?.trim() ?? null;
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      console.error("OpenAI error", res.status, await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    const summary = data.choices?.[0]?.message?.content?.trim();
+    return summary || null;
+  } catch (err) {
+    console.error("summarizeIfEnabled() failed", err);
+    return null;
+  }
 }
+
 
 export default {
   async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {

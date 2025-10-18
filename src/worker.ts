@@ -1,5 +1,35 @@
 import { XMLParser } from "fast-xml-parser";
 
+function resolveLink(raw: any): string {
+  // RSS 2.0: string
+  if (typeof raw.link === "string") return raw.link.trim();
+
+  // Atom: entry.link peut être un tableau d’objets { @__href, @__rel }
+  if (Array.isArray(raw.link)) {
+    const alt = raw.link.find((l: any) => l?.["@_rel"] === "alternate" && l?.["@_href"]);
+    if (alt?.["@_href"]) return String(alt["@_href"]).trim();
+    const first = raw.link.find((l: any) => l?.["@_href"]);
+    if (first?.["@_href"]) return String(first["@_href"]).trim();
+  }
+
+  // Certains feeds utilisent atom:link
+  if (raw["atom:link"]?.["@_href"]) return String(raw["atom:link"]["@_href"]).trim();
+
+  return "";
+}
+
+function safeCacheKeyForSummary(it: { id?: string; url?: string; title?: string }): string {
+  // on mélange url + id + title pour réduire les collisions (base64 safe)
+  const base = `${it.url || ""}|${it.id || ""}|${it.title || ""}`;
+  try {
+    // @ts-ignore: btoa existe dans les Workers
+    return "sum:" + btoa(base);
+  } catch {
+    return "sum:" + base; // fallback
+  }
+}
+
+
 const FEEDS = [
   { url: "https://bitcoinmagazine.com/.rss", topic: "Crypto", source: "Bitcoin Magazine" },
   { url: "https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml", topic: "Crypto", source: "CoinDesk" },
@@ -24,15 +54,22 @@ const parser = new XMLParser({
 
 function normalizeItem(feedMeta: any, raw: any) {
   const title = raw.title?.toString()?.trim() ?? "";
-  const link = raw.link?.toString()?.trim() ?? raw["atom:link"]?.["@_href"] ?? "";
+  const link = resolveLink(raw); // ← remplace l’ancienne ligne
   const pub = raw.pubDate || raw.published || raw.updated || raw["dc:date"];
   const date = pub ? new Date(pub).toISOString() : new Date().toISOString();
-  const guid = (raw.guid?.toString() || link || title + date).trim();
+
+  // Certains feeds ont guid objet/texte (#text). On essaie tout.
+  const guidRaw = raw.guid?.["#text"] ?? raw.guid ?? "";
+  const guid = (typeof guidRaw === "string" ? guidRaw : String(guidRaw)).trim();
   const description =
     raw.description?.toString()?.replace(/<[^>]+>/g, "").slice(0, 1000) ??
     raw.content?.toString()?.replace(/<[^>]+>/g, "").slice(0, 1000) ??
     "";
-
+// ID plus robuste
+  const id =
+  (guid && guid.length > 0 ? guid :
+  link && link.length > 0 ? link :
+  (title + "|" + date));
   return {
     id: guid,
     title,
@@ -44,7 +81,6 @@ function normalizeItem(feedMeta: any, raw: any) {
     tags: [],
   };
 }
-
 async function fetchFeed(env: Env, feedMeta: any) {
   const cacheKey = `etag:${feedMeta.url}`;
   const etag = await env.FEED_CACHE.get(cacheKey);

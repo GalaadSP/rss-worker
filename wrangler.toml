@@ -1,0 +1,13 @@
+name = "rss-worker"
+main = "src/worker.ts"
+compatibility_date = "2025-10-01"
+
+[[kv_namespaces]]
+binding = "FEED_CACHE"
+id = "REPLACE_WITH_YOUR_KV_ID"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+CORS_ORIGIN = "https://<TON-SITE-PAGES>.pages.dev"

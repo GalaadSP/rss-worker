@@ -1,10 +1,7 @@
 name = "rss-worker"
 main = "src/worker.ts"
 compatibility_date = "2025-10-01"
-account_id = "0fc952d32150fa0b85799b0bf1c0c27a" 
-[[kv_namespaces]]
-binding = "FEED_CACHE"
-id = "REPLACE_WITH_YOUR_KV_ID"
+account_id = "0fc952d32150fa0b85799b0bf1c0c27a"
 
 [[kv_namespaces]]
 binding = "FEED_CACHE"
@@ -14,6 +11,8 @@ id = "149aade19ec44cefbbc3d48aa401ea4c"
 crons = ["*/15 * * * *"]
 
 [vars]
-CORS_ORIGIN = "https://larry-jerry-flux.pages.dev/"
+# mets EXACTEMENT l’origine (schéma + host), sans / final
+CORS_ORIGIN = "https://larry-jerry-flux.pages.dev"
+
 
   

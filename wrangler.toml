@@ -11,7 +11,5 @@ crons = ["*/15 * * * *"]
 
 [vars]
 CORS_ORIGIN = "https://larry-jerry-flux.pages.dev/"
-name = "rss-worker"
-main = "src/worker.ts"
-compatibility_date = "2025-10-01"
+
   

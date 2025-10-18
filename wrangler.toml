@@ -6,6 +6,10 @@ account_id = "0fc952d32150fa0b85799b0bf1c0c27a"
 binding = "FEED_CACHE"
 id = "REPLACE_WITH_YOUR_KV_ID"
 
+[[kv_namespaces]]
+binding = "FEED_CACHE"
+id = "149aade19ec44cefbbc3d48aa401ea4c"
+
 [triggers]
 crons = ["*/15 * * * *"]
 

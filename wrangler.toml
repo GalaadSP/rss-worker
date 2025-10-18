@@ -11,3 +11,7 @@ crons = ["*/15 * * * *"]
 
 [vars]
 CORS_ORIGIN = "https://<TON-SITE-PAGES>.pages.dev"
+name = "rss-worker"
+main = "src/worker.ts"
+compatibility_date = "2025-10-01"
+account_id = "0fc952d32150fa0b85799b0bf1c0c27a"   

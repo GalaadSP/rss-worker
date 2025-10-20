@@ -154,6 +154,44 @@ function escapeHtml(s: string) {
     .replace(/'/g, "&#039;");
 }
 
+function sanitizeHtmlFragment(html: string): string {
+  if (!html) return "";
+
+  const blockedTags = [
+    "script",
+    "style",
+    "iframe",
+    "object",
+    "embed",
+    "link",
+    "meta",
+    "form",
+    "input",
+    "button",
+    "textarea",
+  ];
+
+  let safe = html;
+
+  for (const tag of blockedTags) {
+    const blockPattern = new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, "gi");
+    const selfClosingPattern = new RegExp(`<${tag}\\b[^>]*>`, "gi");
+    const closingPattern = new RegExp(`</${tag}\\s*>`, "gi");
+    safe = safe.replace(blockPattern, "");
+    safe = safe.replace(selfClosingPattern, "");
+    safe = safe.replace(closingPattern, "");
+  }
+
+  safe = safe.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+
+  safe = safe.replace(
+    /(href|src)\s*=\s*("|')?\s*javascript:[^"'>\s]*("|')?/gi,
+    (_, attr: string) => `${attr}="#"`,
+  );
+
+  return safe;
+}
+
 function footer(it: Item) {
   return `
   <hr/>
@@ -167,9 +205,8 @@ function ensureHtml(body: string, it: Item): string {
   const hasHtml = /<\/?[a-z][\s\S]*>/i.test(body);
   const core = hasHtml
     ? body
-    : `<h1>${escapeHtml(it.title)}</h1>
-<p>${escapeHtml(body).replace(/\n/g, "</p><p>")}</p>`;
-  return `<article>${core}${footer(it)}</article>`;
+    : `<h1>${escapeHtml(it.title)}</h1><p>${escapeHtml(body).replace(/\n/g, "</p><p>")}</p>`;
+  return sanitizeHtmlFragment(`<article>${core}${footer(it)}</article>`);
 }
 
 function baseMeta(it: Item): PostMeta {
@@ -205,7 +242,12 @@ function postKey(it: { id?: string; url?: string; title?: string }) {
 async function getPost(env: Env, key: string) {
   try {
     const raw = await env.FEED_CACHE.get(key, "json");
-    return raw as Post | null;
+    if (!raw || typeof raw !== "object") return null;
+    const post = raw as Post;
+    if (typeof post.html === "string") {
+      return { ...post, html: sanitizeHtmlFragment(post.html) };
+    }
+    return post;
   } catch (error) {
     console.error("getPost failed", { key, error });
     return null;
@@ -214,7 +256,8 @@ async function getPost(env: Env, key: string) {
 
 async function putPost(env: Env, key: string, post: Post) {
   try {
-    await env.FEED_CACHE.put(key, JSON.stringify(post), {
+    const safePost: Post = { ...post, html: sanitizeHtmlFragment(post.html) };
+    await env.FEED_CACHE.put(key, JSON.stringify(safePost), {
       expirationTtl: SUM_TTL_SECONDS,
     });
   } catch (error) {

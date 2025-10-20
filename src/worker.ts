@@ -53,24 +53,31 @@ type RouteHandler = (request: Request, env: Env) => Promise<Response>;
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
-const FEEDS: FeedConfig[] = [
-  { url: "https://openai.com/blog/rss", topic: "IA", source: "OpenAI Blog" },
-  { url: "https://www.anthropic.com/index.xml", topic: "IA", source: "Anthropic" },
-  { url: "https://deepmind.google/discover/blog/feed.xml", topic: "IA", source: "Google DeepMind" },
-  { url: "https://feeds.feedburner.com/TheGradient", topic: "IA", source: "The Gradient" },
-  { url: "https://www.theverge.com/rss/index.xml", topic: "Tech", source: "The Verge" },
-  { url: "https://techcrunch.com/feed/", topic: "Tech", source: "TechCrunch" },
-  { url: "https://news.ycombinator.com/rss", topic: "Tech", source: "Hacker News" },
-  { url: "https://www.lesswrong.com/feed.xml", topic: "Philo", source: "LessWrong" },
-  { url: "https://aeon.co/feed.rss", topic: "Philo", source: "Aeon" },
-  { url: "https://www.reuters.com/world/rss", topic: "News", source: "Reuters" },
-  { url: "http://feeds.bbci.co.uk/news/rss.xml", topic: "News", source: "BBC News" },
-  { url: "https://bitcoinmagazine.com/.rss", topic: "Crypto", source: "Bitcoin Magazine" },
-  {
-    url: "https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml",
-    topic: "Crypto",
-    source: "CoinDesk",
-  },
+const FEEDS = [
+  // IA / ML
+  { url: "https://openai.com/blog/rss",                              topic: "IA",    source: "OpenAI Blog" },
+  { url: "https://www.deepmind.com/blog/rss.xml",                    topic: "IA",    source: "Google DeepMind" },
+  { url: "https://feeds.feedburner.com/TheGradient",                 topic: "IA",    source: "The Gradient" },
+  { url: "https://www.technologyreview.com/feed/",                   topic: "IA",    source: "MIT Tech Review" },
+
+  // Tech
+  { url: "https://www.theverge.com/rss/index.xml",                   topic: "Tech",  source: "The Verge" },
+  { url: "https://techcrunch.com/feed/",                             topic: "Tech",  source: "TechCrunch" },
+  { url: "https://cdn.arstechnica.net/feed/",                        topic: "Tech",  source: "Ars Technica" },
+  { url: "https://www.wired.com/feed/rss",                           topic: "Tech",  source: "WIRED" },
+
+  // Philo / idées
+  { url: "https://www.lesswrong.com/feed.xml",                       topic: "Philo", source: "LessWrong" },
+  { url: "https://aeon.co/feed.rss",                                 topic: "Philo", source: "Aeon" },
+
+  // News (monde/éco)
+  { url: "https://feeds.bbci.co.uk/news/rss.xml",                    topic: "News",  source: "BBC News" },
+  { url: "https://www.ft.com/rss/home",                              topic: "News",  source: "Financial Times" },
+  { url: "https://www.nature.com/subjects/artificial-intelligence.rss", topic: "News", source: "Nature (AI)" },
+
+  // Crypto
+  { url: "https://bitcoinmagazine.com/.rss",                         topic: "Crypto", source: "Bitcoin Magazine" },
+  { url: "https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml", topic: "Crypto", source: "CoinDesk" },
 ];
 
 const MAX_ITEMS_PER_FEED = 25;
@@ -372,11 +379,15 @@ async function fetchFeed(env: Env, feedMeta: FeedConfig): Promise<Item[]> {
   const cachedEtag = await env.FEED_CACHE.get(etagKey);
 
   try {
-    const res = await fetch(feedMeta.url, {
-      headers: cachedEtag ? { "If-None-Match": cachedEtag } : {},
-      cf: { cacheTtl: 0, cacheEverything: false },
-    });
-
+  const res = await fetch(feedMeta.url, {
+  headers: {
+    ...(cachedEtag ? { "If-None-Match": cachedEtag } : {}),
+    "User-Agent": "LarryFeedBot/2.0 (+https://larry-jerry-flux.pages.dev)",
+    "Accept": "application/rss+xml, application/atom+xml, text/xml;q=0.9, */*;q=0.8",
+  },
+  cf: { cacheTtl: 0, cacheEverything: false },
+});
+    
     if (res.status === 304) {
       const cached = await env.FEED_CACHE.get(itemsKey, "json");
       if (Array.isArray(cached)) return cached as Item[];
